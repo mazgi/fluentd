@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #
 # Fluent
 #
@@ -19,11 +20,13 @@ module Fluent
 
 
 class TailInput < Input
+  require 'rb-inotify'
   Plugin.register_input('tail', self)
 
   def initialize
     super
     @paths = []
+    @tails = []
   end
 
   config_param :path, :string
@@ -60,17 +63,62 @@ class TailInput < Input
 
   def start
     @loop = Coolio::Loop.new
-    @tails = @paths.map {|path|
-      pe = @pf ? @pf[path] : NullPositionEntry.instance
-      TailWatcher.new(path, @rotate_wait, pe, &method(:receive_lines))
-    }
-    @tails.each {|tail|
-      tail.attach(@loop)
-    }
+    # TODO ちゃんとしたダミーTailWatcherつくる
+    dummy_tail = TailWatcher.new('/dev/null', @rotate_wait, NullPositionEntry.instance, &method(:receive_lines))
+    @tails.push dummy_tail
+    dummy_tail.attach(@loop)
     @thread = Thread.new(&method(:run))
+    add_watchers
+    start_notifier
+  end
+
+  def start_notifier
+    @notifier = INotify::Notifier.new
+    @paths.each {|path|
+      next unless path.index('*') && path.end_with?('/')
+      while true
+        break unless path.index('*')
+        path = File::dirname(path)
+      end
+      next if @notifier.watchers.values.index {|w|
+        w.path == path
+      }
+      @notifier.watch(path, :recursive, :create, :delete, :attrib) {|event|
+        $log.trace("detect \"#{event.name}\".")
+        add_watchers
+      }
+    }
+    Thread.new {
+      @notifier.run
+    }
+  end
+
+  def add_watchers
+    files = []
+    @paths.each {|path|
+      files |= Dir::glob(path).select {|entry|
+        case File::ftype entry
+        when 'directory'
+          false
+        else
+          true
+        end
+      }
+    }
+    files.each {|file|
+      next if @tails.index {|tail|
+        tail.path == file
+      }
+      pe = @pf ? @pf[file] : NullPositionEntry.instance
+      tail = TailWatcher.new(file, @rotate_wait, pe, &method(:receive_lines))
+      tail.attach(@loop)
+      @tails.push tail
+    }
   end
 
   def shutdown
+    @notifier.stop
+    @notifier.close
     @tails.each {|tail|
       tail.close
     }
@@ -111,6 +159,8 @@ class TailInput < Input
   end
 
   class TailWatcher
+    attr_reader :path
+
     def initialize(path, rotate_wait, pe, &receive_lines)
       @path = path
       @rotate_wait = rotate_wait

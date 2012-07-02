@@ -116,6 +116,8 @@ Gem::Specification.new do |s|
       s.add_development_dependency(%q<rr>, [">= 1.0.0"])
       s.add_development_dependency(%q<timecop>, [">= 0.3.0"])
       s.add_development_dependency(%q<jeweler>, [">= 1.0.0"])
+      s.add_development_dependency(%q<rb-inotify>, [">= 0.8.8"])
+      s.add_runtime_dependency(%q<rb-inotify>, [">= 0.8.8"])
     else
       s.add_dependency(%q<fluentd>, [">= 0"])
       s.add_dependency(%q<rake>, [">= 0.9.2"])
@@ -135,6 +137,7 @@ Gem::Specification.new do |s|
       s.add_dependency(%q<rr>, [">= 1.0.0"])
       s.add_dependency(%q<timecop>, [">= 0.3.0"])
       s.add_dependency(%q<jeweler>, [">= 1.0.0"])
+      s.add_dependency(%q<rb-inotify>, [">= 0.8.8"])
     end
   else
     s.add_dependency(%q<fluentd>, [">= 0"])
@@ -155,6 +158,7 @@ Gem::Specification.new do |s|
     s.add_dependency(%q<rr>, [">= 1.0.0"])
     s.add_dependency(%q<timecop>, [">= 0.3.0"])
     s.add_dependency(%q<jeweler>, [">= 1.0.0"])
+    s.add_dependency(%q<rb-inotify>, [">= 0.8.8"])
   end
 end
 
