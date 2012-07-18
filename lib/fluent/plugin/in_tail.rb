@@ -16,11 +16,12 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 #
+require 'rb-inotify'
+
 module Fluent
 
 
 class TailInput < Input
-  require 'rb-inotify'
   Plugin.register_input('tail', self)
 
   def initialize
@@ -30,7 +31,7 @@ class TailInput < Input
   end
 
   config_param :path, :string
-  config_param :tag, :string
+  config_param :tag_format, :string
   config_param :rotate_wait, :time, :default => 5
   config_param :pos_file, :string, :default => nil
 
@@ -63,7 +64,7 @@ class TailInput < Input
 
   def start
     @loop = Coolio::Loop.new
-    # TODO ¤Á¤ã¤ó¤È¤·¤¿¥À¥ß¡¼TailWatcher¤Ä¤¯¤ë
+    # TODO ã¡ã‚ƒã‚“ã¨ã—ãŸãƒ€ãƒŸãƒ¼TailWatcherã¤ãã‚‹
     dummy_tail = TailWatcher.new('/dev/null', @rotate_wait, NullPositionEntry.instance, &method(:receive_lines))
     @tails.push dummy_tail
     dummy_tail.attach(@loop)
@@ -72,10 +73,36 @@ class TailInput < Input
     start_notifier
   end
 
+  def add_watchers
+    files = []
+    @paths.each {|path|
+      if path.index('*') || path.end_with?('/')
+        files |= Dir::glob(path).select {|entry|
+          case File::ftype entry
+          when 'directory'
+            false
+          else
+            true
+          end
+        }
+      else
+        files << path
+      end
+    }
+    files.each {|file|
+      next if @tails.index {|tail|
+        tail.path == file
+      }
+      pe = @pf ? @pf[file] : NullPositionEntry.instance
+      tail = TailWatcher.new(file, @rotate_wait, pe, &method(:receive_lines))
+      tail.attach(@loop)
+      @tails.push tail
+    }
+  end
+
   def start_notifier
     @notifier = INotify::Notifier.new
     @paths.each {|path|
-      next unless path.index('*') && path.end_with?('/')
       while true
         break unless path.index('*')
         path = File::dirname(path)
@@ -86,33 +113,10 @@ class TailInput < Input
       @notifier.watch(path, :recursive, :create, :delete, :attrib) {|event|
         $log.trace("detect \"#{event.name}\".")
         add_watchers
-      }
+      } if File::exist? path
     }
     Thread.new {
       @notifier.run
-    }
-  end
-
-  def add_watchers
-    files = []
-    @paths.each {|path|
-      files |= Dir::glob(path).select {|entry|
-        case File::ftype entry
-        when 'directory'
-          false
-        else
-          true
-        end
-      }
-    }
-    files.each {|file|
-      next if @tails.index {|tail|
-        tail.path == file
-      }
-      pe = @pf ? @pf[file] : NullPositionEntry.instance
-      tail = TailWatcher.new(file, @rotate_wait, pe, &method(:receive_lines))
-      tail.attach(@loop)
-      @tails.push tail
     }
   end
 
@@ -134,7 +138,7 @@ class TailInput < Input
     $log.error_backtrace
   end
 
-  def receive_lines(lines)
+  def receive_lines(lines, basename = '')
     es = MultiEventStream.new
     lines.each {|line|
       begin
@@ -150,7 +154,7 @@ class TailInput < Input
     }
 
     unless es.empty?
-      Engine.emit_stream(@tag, es)
+      Engine.emit_stream(@tag_format.gsub('%{basename}', basename), es)
     end
   end
 
@@ -311,6 +315,7 @@ class TailInput < Input
       def initialize(io, pe, &receive_lines)
         $log.info "following tail of #{io.path}"
         @io = io
+        @basename = File::basename(@io.path)
         @pe = pe
         @receive_lines = receive_lines
         @buffer = ''.force_encoding('ASCII-8BIT')
@@ -344,7 +349,7 @@ class TailInput < Input
           end
 
           unless lines.empty?
-            @receive_lines.call(lines)
+            @receive_lines.call(lines, @basename)
             @pe.update_pos(@io.pos - @buffer.bytesize)
           end
 
