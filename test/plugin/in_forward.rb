@@ -186,11 +186,11 @@ class ForwardInputTest < Test::Unit::TestCase
       data = [
         encrypt("tag1", "pass", salt),
         encrypt(Zlib::Deflate.deflate(entries), "pass", salt),
-	{
-	  "encrypted" => true,
-	  "salt" => salt,
+        {
+          "encrypted" => true,
+          "salt" => salt,
           "detail" => encrypt({ "compressed" => true, }.to_msgpack, "pass", salt),
-	},
+        },
       ]
       send_data data.to_msgpack
       sleep 0.5
