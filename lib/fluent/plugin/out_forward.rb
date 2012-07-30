@@ -254,7 +254,7 @@ class ForwardOutput < ObjectBufferedOutput
         $log.trace("tag encrypted(dump): [#{decrypted_tag}] -> [#{encrypted_tag}]")
         # entries
         entries = encrypt(entries, @password, attribute['salt'])
-	# attribute detail
+        # attribute detail
         attribute_detail = encrypt(attribute_detail.to_msgpack, @password, attribute['salt'])
       end
       $log.trace("msg attribute:#{attribute}")
