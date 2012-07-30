@@ -230,7 +230,6 @@ class ForwardOutput < ObjectBufferedOutput
       attribute = {}
       attribute_detail = {}
       attribute_detail['compressed'] = !@compression_level.nil?
-      attribute_detail['hostname'] = `hostname`.chomp
       attribute['encrypted'] = !@password.nil?
       attribute['detail'] = attribute_detail
 
